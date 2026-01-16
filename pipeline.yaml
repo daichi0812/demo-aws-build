@@ -210,7 +210,7 @@ Resources:
               Configuration:
                 ActionMode: CREATE_UPDATE
                 StackName: !Ref AppStackName
-                Capabilities: CAPABILITY_NAMED_IAM
+                Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
                 RoleArn: !GetAtt CloudFormationExecutionRole.Arn
                 TemplatePath: "BuildOutput::packaged.yaml"
               InputArtifacts:
