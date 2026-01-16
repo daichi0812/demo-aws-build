@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ct3-infra-demo minimal SAM app
+
+Resources:
+  HelloFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.11
+      Architectures:
+        - arm64
+      Handler: app.lambda_handler
+      CodeUri: src/
+      MemorySize: 128
+      Timeout: 3
+      Policies:
+        - AWSLambdaBasicExecutionRole
