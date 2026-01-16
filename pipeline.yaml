@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "demo: CodePipeline (GitHub via CodeStar Connections) -> CodeBuild -> CloudFormation deploy (SAM)"
+Description: "demo: CodePipeline -> CodeBuild -> Deploy to Dev -> Manual Approval -> Deploy to Prod (SAM)"
 
 Parameters:
   PipelineName:
@@ -7,16 +7,17 @@ Parameters:
     Default: demo-aws-build-pipeline
   GitHubFullRepositoryId:
     Type: String
-    Default: "daichi0812/demo-aws-build"   # owner/repo
+    Default: "daichi0812/demo-aws-build"
   BranchName:
     Type: String
     Default: "main"
-  AppStackName:
+
+  AppStackNameDev:
     Type: String
-    Default: "demo-aws-build-app"          # デプロイ先スタック名（SAMアプリ）
-  RegionName:
+    Default: "demo-aws-build-app-dev"
+  AppStackNameProd:
     Type: String
-    Default: "ap-northeast-1"
+    Default: "demo-aws-build-app-prod"
 
 Resources:
   ArtifactBucket:
@@ -83,7 +84,8 @@ Resources:
             Value: !Ref ArtifactBucket
       TimeoutInMinutes: 15
 
-  CloudFormationExecutionRole:
+  # 学習用：まずは Dev/Prod それぞれに CloudFormation 実行ロールを分ける
+  CloudFormationExecutionRoleDev:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -93,8 +95,30 @@ Resources:
             Principal: { Service: cloudformation.amazonaws.com }
             Action: sts:AssumeRole
       Policies:
-        # 学習用にまず動くこと優先（後で最小権限に絞る）
-        - PolicyName: DeploySamAppBroad
+        - PolicyName: DeploySamAppBroadDev
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                  - lambda:*
+                  - iam:*
+                  - logs:*
+                  - s3:*
+                Resource: "*"
+
+  CloudFormationExecutionRoleProd:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: cloudformation.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DeploySamAppBroadProd
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -121,6 +145,7 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              # Artifacts bucket
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -131,15 +156,21 @@ Resources:
                 Resource:
                   - !GetAtt ArtifactBucket.Arn
                   - !Sub "${ArtifactBucket.Arn}/*"
+
+              # CodeBuild
               - Effect: Allow
                 Action:
                   - codebuild:StartBuild
                   - codebuild:BatchGetBuilds
                 Resource: !GetAtt BuildProject.Arn
+
+              # CodeStar Connection
               - Effect: Allow
                 Action:
                   - codestar-connections:UseConnection
                 Resource: !Ref Connection
+
+              # CloudFormation (Dev/Prod stacks + changesets)
               - Effect: Allow
                 Action:
                   - cloudformation:CreateStack
@@ -154,12 +185,20 @@ Resources:
                   - cloudformation:ExecuteChangeSet
                   - cloudformation:DeleteChangeSet
                 Resource:
-                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AppStackName}/*"
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AppStackNameDev}/*"
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AppStackNameProd}/*"
                   - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:changeSet/*"
+
+              # PassRole for CloudFormation execution roles (Dev/Prod)
               - Effect: Allow
                 Action:
                   - iam:PassRole
-                Resource: !GetAtt CloudFormationExecutionRole.Arn
+                Resource:
+                  - !GetAtt CloudFormationExecutionRoleDev.Arn
+                  - !GetAtt CloudFormationExecutionRoleProd.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: cloudformation.amazonaws.com
 
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
@@ -169,6 +208,7 @@ Resources:
       ArtifactStore:
         Type: S3
         Location: !Ref ArtifactBucket
+
       Stages:
         - Name: Source
           Actions:
@@ -185,6 +225,7 @@ Resources:
                 DetectChanges: true
               OutputArtifacts:
                 - Name: SourceOutput
+
         - Name: Build
           Actions:
             - Name: CodeBuild
@@ -199,9 +240,10 @@ Resources:
                 - Name: SourceOutput
               OutputArtifacts:
                 - Name: BuildOutput
-        - Name: Deploy
+
+        - Name: DeployDev
           Actions:
-            - Name: CloudFormation_Deploy
+            - Name: CloudFormation_Deploy_Dev
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -209,9 +251,37 @@ Resources:
                 Version: "1"
               Configuration:
                 ActionMode: CREATE_UPDATE
-                StackName: !Ref AppStackName
+                StackName: !Ref AppStackNameDev
                 Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+                RoleArn: !GetAtt CloudFormationExecutionRoleDev.Arn
+                TemplatePath: "BuildOutput::packaged.yaml"
+              InputArtifacts:
+                - Name: BuildOutput
+
+        - Name: ApproveProd
+          Actions:
+            - Name: Manual_Approval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: "1"
+              Configuration:
+                CustomData: "Approve deployment to PROD after verifying DEV."
+
+        - Name: DeployProd
+          Actions:
+            - Name: CloudFormation_Deploy_Prod
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                StackName: !Ref AppStackNameProd
+                Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
+                RoleArn: !GetAtt CloudFormationExecutionRoleProd.Arn
                 TemplatePath: "BuildOutput::packaged.yaml"
               InputArtifacts:
                 - Name: BuildOutput
@@ -223,3 +293,7 @@ Outputs:
     Value: !Ref ArtifactBucket
   ConnectionArn:
     Value: !Ref Connection
+  DevStackName:
+    Value: !Ref AppStackNameDev
+  ProdStackName:
+    Value: !Ref AppStackNameProd
