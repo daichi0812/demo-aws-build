@@ -13,7 +13,7 @@ phases:
     commands:
       - sam --version
       - sam build
-      - pytest -q
+      - PYTHONPATH=. pytest -q
 artifacts:
   files:
     - .aws-sam/**/*
