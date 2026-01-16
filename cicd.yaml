@@ -1,16 +1,13 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: "demo: CodeCommit + CodeBuild for SAM build/test"
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "demo: GitHub (public) + CodeBuild for SAM build/test"
 
 Parameters:
-  RepoName:
-    Type: String
-    Default: demo-aws-build
   BranchName:
     Type: String
     Default: main
-  ProjectName:
+  GitHubRepoUrl:
     Type: String
-    Default: demo-aws-build-CodeBuild
+    Default: "https://github.com/daichi0812/demo-aws-build.git"
 
 Resources:
   ArtifactBucket:
@@ -22,11 +19,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-  Repo:
-    Type: AWS::CodeCommit::Repository
-    Properties:
-      RepositoryName: !Ref RepoName
-      RepositoryDescription: "SAM demo repo"
+
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -42,14 +35,13 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              # CloudWatch Logs
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: "*"
-              # S3 artifacts
+
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -60,41 +52,30 @@ Resources:
                 Resource:
                   - !GetAtt ArtifactBucket.Arn
                   - !Sub "${ArtifactBucket.Arn}/*"
-              # CodeCommit read
-              - Effect: Allow
-                Action:
-                  - codecommit:GitPull
-                  - codecommit:GetBranch
-                  - codecommit:GetCommit
-                  - codecommit:GetRepository
-                Resource: !GetAtt Repo.Arn
+
   BuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Ref ProjectName
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Artifacts:
         Type: S3
         Location: !Ref ArtifactBucket
         Packaging: ZIP
-        Name: !Sub "${ProjectName}.zip"
+        Name: "codebuild-artifact.zip"
       Environment:
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:7.0
         PrivilegedMode: false
       Source:
-        Type: CODECOMMIT
-        Location: !GetAtt Repo.CloneUrlHttp
+        Type: GITHUB
+        Location: !Ref GitHubRepoUrl
         BuildSpec: buildspec.yaml
       SourceVersion: !Ref BranchName
       TimeoutInMinutes: 15
 
 Outputs:
-  CodeCommitCloneUrlHttp:
-    Value: !GetAtt Repo.CloneUrlHttp
   ArtifactBucketName:
     Value: !Ref ArtifactBucket
   CodeBuildProjectName:
     Value: !Ref BuildProject
-
