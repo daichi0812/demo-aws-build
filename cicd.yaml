@@ -71,6 +71,15 @@ Resources:
         Type: GITHUB
         Location: !Ref GitHubRepoUrl
         BuildSpec: buildspec.yaml
+        Auth: 
+          Type: OAUTH
+      Triggers:
+        Webhook: true
+        FilterGroups:
+          - - Type: EVENT
+              Pattern: PUSH
+            - Type: HEAD_REF
+              Pattern: "^refs/heads/main$"
       SourceVersion: !Ref BranchName
       TimeoutInMinutes: 15
 
