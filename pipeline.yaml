@@ -142,9 +142,16 @@ Resources:
                 Resource: !Ref Connection
               - Effect: Allow
                 Action:
-                  - iam:PassRole
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:GetTemplateSummary
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet
                 Resource:
-                  - !GetAtt CloudFormationExecutionRole.Arn
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AppStackName}/*"
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:changeset/*"
 
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
