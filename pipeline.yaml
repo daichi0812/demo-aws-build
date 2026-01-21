@@ -208,6 +208,15 @@ Resources:
       ArtifactStore:
         Type: S3
         Location: !Ref ArtifactBucket
+      
+      Triggers:
+        - ProviderType: CodeStarSourceConnection
+          GitConfiguration:
+            SourceActionName: GitHub_Source
+            Push:
+              - Branches:
+                  Includes:
+                    - main
 
       Stages:
         - Name: Source
