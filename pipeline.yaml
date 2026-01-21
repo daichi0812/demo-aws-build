@@ -209,17 +209,6 @@ Resources:
         Type: S3
         Location: !Ref ArtifactBucket
       
-      PipelineType: V2
-      
-      Triggers:
-        - ProviderType: CodeStarSourceConnection
-          GitConfiguration:
-            SourceActionName: GitHub_Source
-            Push:
-              - Branches:
-                  Includes:
-                    - main
-
       Stages:
         - Name: Source
           Actions:
@@ -233,7 +222,7 @@ Resources:
                 ConnectionArn: !Ref Connection
                 FullRepositoryId: !Ref GitHubFullRepositoryId
                 BranchName: !Ref BranchName
-                DetectChanges: false
+                DetectChanges: true
               OutputArtifacts:
                 - Name: SourceOutput
 
