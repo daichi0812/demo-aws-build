@@ -4,7 +4,7 @@ Description: "demo: CodePipeline -> CodeBuild -> Deploy to Dev -> Manual Approva
 Parameters:
   PipelineName:
     Type: String
-    Default: demo-aws-build-pipeline
+    Default: demo-aws-build-pipeline-v2
   GitHubFullRepositoryId:
     Type: String
     Default: "daichi0812/demo-aws-build"
@@ -31,7 +31,7 @@ Resources:
   Connection:
     Type: AWS::CodeStarConnections::Connection
     Properties:
-      ConnectionName: !Sub "${PipelineName}-github"
+      ConnectionName: !Sub "dab-ci-v2-gh"
       ProviderType: GitHub
 
   CodeBuildRole:
