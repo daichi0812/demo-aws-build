@@ -4,7 +4,7 @@ Description: "demo: CodePipeline -> CodeBuild -> Deploy to Dev -> Manual Approva
 Parameters:
   PipelineName:
     Type: String
-    Default: demo-aws-build-pipeline-v2
+    Default: demo-aws-build-pipeline-v3
   GitHubFullRepositoryId:
     Type: String
     Default: "daichi0812/demo-aws-build"
